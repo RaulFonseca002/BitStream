@@ -12,28 +12,6 @@ public class BitStream {
     private int deadBitCount;
     public boolean eof;
 
-    public static void main(String[] args) throws IOException{
-
-        BitStream bs = new BitStream("test.bin");
-        
-        for(int c = 0; c < (11*8) + 1; c++){
-            bs.write(c%5 == 3);
-        }
-
-        bs.seek((0));
-        for(int c = 0; c < 8; c++) bs.read();
-
-        bs.seek((0));
-        for(int c = 0; c < 8; c++) bs.write(true);
-
-        bs.seek((0));
-        for(int c = 0; c < 8; c++) bs.read();
-
-
-        bs.close();
-
-    }
-
     public BitStream(String fileName) throws IOException{
 
         raf = new RandomAccessFile(fileName, "rw");
@@ -45,24 +23,31 @@ public class BitStream {
         eof = false;
     }
 
+
     public void seek(long bits) throws IOException{
 
-        bits += 8; // pular o header
-        close();
-        raf.seek(bits/8);
+        bits += 8;
+        long pos = bits/8;
+        int index = (int)bits%8;
+
+        if(pos >= raf.length() - 1){
+            if(pos == raf.getFilePointer()) pos--;
+            if(index <= deadBitCount) index = deadBitCount;
+        }
+
+        raf.seek(pos);
         fill();
-        index = 7 - (int)bits%8;
-        raf.seek(bits/8);
+        raf.seek(pos);
+        this.index = index;
+
     }
 
     public boolean read() throws IOException{
-
         boolean resp;
 
         if(index < 0) fill();
 
         resp = (buffer >> index & 1) == 1;
-        System.out.println(index + ": " + resp);
         index--;
         return resp;
         
@@ -77,7 +62,7 @@ public class BitStream {
 
         buffer = (x) ? setBit(index, buffer) : buffer;
         index--;
-        
+
         if (index < 0){
             raf.write(buffer);
             index = 7;
@@ -110,12 +95,15 @@ public class BitStream {
         }
         
         buffer = raf.read();   
-        System.out.println("buffer: " + buffer);;   
 
     }
 
     public long length() throws IOException{
-        return ((raf.length() - 1)*8);
+        return ((raf.length() - 2)*8) + deadBitCount;
+    }
+
+    public long getFilePointer() throws IOException{
+        return ((raf.getFilePointer() - 1)*8) - index;
     }
     
 
